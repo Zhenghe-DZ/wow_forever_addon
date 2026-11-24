@@ -1,3 +1,4 @@
+local _, ns = ...
 local equipment = C_EquipmentSet
 local rules = {
     { "default", "默认" }, { "mount", "骑乘" }, { "swim", "游泳" },
@@ -16,7 +17,7 @@ local function Say(message)
     print("|cff66cfffMyForeverTools|r " .. message)
 end
 
-local function GetActiveTalentGroup()
+local function GetTalentGroup()
     if C_SpecializationInfo and C_SpecializationInfo.GetActiveSpecGroup then
         return C_SpecializationInfo.GetActiveSpecGroup()
     end
@@ -66,7 +67,7 @@ local function Refresh()
         return
     end
 
-    local spec = GetActiveTalentGroup()
+    local spec = GetTalentGroup()
     local rule, name = GetDesiredRule(spec)
     if rule ~= observedRule or name ~= observedName or spec ~= observedSpec then
         observedRule, observedName, observedSpec = rule, name, spec
@@ -122,7 +123,7 @@ local function UpdateTicker()
 end
 
 local function ShowStatus()
-    local spec = GetActiveTalentGroup()
+    local spec = GetTalentGroup()
     local rule, name = GetDesiredRule(spec)
     Say((config.enabled and "已开启" or "已关闭") .. "。当前天赋组：" .. (spec or "?")
         .. "。匹配：" .. labels[rule] .. " → " .. (name or "未设置"))
@@ -141,19 +142,34 @@ local function Help()
     Say("/mftgear city remove <地图ID>，/mftgear on | off | apply")
 end
 
-local function ConfigureRule(action, args)
-    local rule, name = args:match("^(%S+)%s*(.-)%s*$")
-    rule = rule and rule:lower()
-    if not labels[rule] then Help(); return end
-    if action == "set" then
-        if name == "" or equipment.GetEquipmentSetID(name) == nil then
+local function IsAvailable()
+    return config ~= nil and equipment and equipment.CanUseEquipmentSets and equipment.UseEquipmentSet
+end
+
+local function CanEnable()
+    return config.sets.default ~= nil and equipment.GetEquipmentSetID(config.sets.default) ~= nil
+end
+
+local function SetEnabled(enabled)
+    if enabled and not CanEnable() then
+        Say("请先设置一套默认装备，用于离开场景时恢复。")
+        return
+    end
+    config.enabled = enabled
+    UpdateTicker()
+    Say(enabled and "自动换装已开启。" or "自动换装已关闭。")
+end
+
+local function SetRule(rule, name)
+    if name then
+        if equipment.GetEquipmentSetID(name) == nil then
             Say("请填写已有的装备套装名称。用 /mftgear sets 查看。")
             return
         end
         config.sets[rule] = name
     else
         if rule == "default" and config.enabled then
-            Say("先用 /mftgear off 暂停，再清除默认套装。")
+            Say("请先暂停自动换装，再清除默认套装。")
             return
         end
         config.sets[rule] = nil
@@ -162,45 +178,66 @@ local function ConfigureRule(action, args)
     Say(labels[rule] .. " → " .. (config.sets[rule] or "未设置"))
 end
 
-local function ConfigureCity(args)
-    if args == "add" then
-        local id = GetMapID()
-        local info = id and C_Map.GetMapInfo(id)
-        if not info or not IsResting() then
-            Say("请到主城休息区再登记地图。")
-            return
-        end
-        config.cities[id] = info.name
-        Say("已登记主城：" .. info.name .. " (" .. id .. ")")
-    else
-        local id = tonumber(args:match("^remove%s+(%d+)$"))
-        if not id or not config.cities[id] then Help(); return end
-        Say("已移除主城：" .. config.cities[id])
-        config.cities[id] = nil
+local function GetCurrentCity()
+    if not IsResting() then return end
+    local id = GetMapID()
+    local info = id and C_Map.GetMapInfo(id)
+    if info and info.name then return id, info.name end
+end
+
+local function AddCurrentCity()
+    local id, name = GetCurrentCity()
+    if not id then
+        Say("请到主城休息区再登记地图。")
+        return
     end
+    config.cities[id] = name
+    ResetSelection()
+    Say("已登记主城：" .. name .. " (" .. id .. ")")
+end
+
+local function RemoveCity(id)
+    if not id or not config.cities[id] then return end
+    Say("已移除主城：" .. config.cities[id])
+    config.cities[id] = nil
     ResetSelection()
 end
 
+ns.EquipmentSets = {
+    rules = rules,
+    IsAvailable = IsAvailable,
+    CanEnable = CanEnable,
+    GetSettings = function() return config end,
+    SetEnabled = SetEnabled,
+    SetRule = SetRule,
+    GetCurrentCity = GetCurrentCity,
+    AddCurrentCity = AddCurrentCity,
+    RemoveCity = RemoveCity,
+}
+
 local function HandleCommand(message)
     if not config then Say("角色设置尚未加载。"); return end
-    if not equipment or not equipment.CanUseEquipmentSets or not equipment.UseEquipmentSet then
+    if not IsAvailable() then
         Say("当前客户端没有可用的装备套装接口。")
         return
     end
     local action, args = message:match("^%s*(%S+)%s*(.-)%s*$")
     action = action and action:lower()
     if action == "set" or action == "clear" then
-        ConfigureRule(action, args)
+        local rule, name = args:match("^(%S+)%s*(.-)%s*$")
+        rule = rule and rule:lower()
+        if not labels[rule] then Help(); return end
+        SetRule(rule, action == "set" and name or nil)
     elseif action == "city" then
-        ConfigureCity(args)
-    elseif action == "on" or action == "off" then
-        if action == "on" and (not config.sets.default or equipment.GetEquipmentSetID(config.sets.default) == nil) then
-            Say("请先用 /mftgear set default <套装名> 设置离开场景后要恢复的套装。")
-            return
+        if args == "add" then
+            AddCurrentCity()
+        else
+            local id = tonumber(args:match("^remove%s+(%d+)$"))
+            if not id or not config.cities[id] then Help(); return end
+            RemoveCity(id)
         end
-        config.enabled = action == "on"
-        UpdateTicker()
-        Say(config.enabled and "自动换装已开启。" or "自动换装已关闭。")
+    elseif action == "on" or action == "off" then
+        SetEnabled(action == "on")
     elseif action == "apply" then
         if not config.enabled then Say("请先用 /mftgear on 开启。"); return end
         ResetSelection()

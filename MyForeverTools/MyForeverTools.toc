@@ -1,9 +1,10 @@
 ## Interface: 16001
 ## Title: MyForeverTools
 ## Notes: Personal tools for WoW Forever
-## Version: 0.2.0
+## Version: 0.3.0
 ## OptionalDeps: DungeonsForever
 ## SavedVariablesPerCharacter: MyForeverToolsCharacterDB
 
 Integrations\DungeonsForeverFonts.lua
 Modules\EquipmentSets.lua
+Modules\EquipmentSetScenarios.lua
