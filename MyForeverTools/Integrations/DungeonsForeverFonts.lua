@@ -1,81 +1,30 @@
 local locale = GetLocale()
 if locale == "zhCN" or locale == "zhTW" then return end
 
-local fontFamilies = {}
-local fontFamilyCount = 0
-local updatedFonts = setmetatable({}, { __mode = "k" })
-local fontMembers = {
-    { alphabet = "roman", file = "Fonts\\FRIZQT__.TTF", offset = 0 },
-    { alphabet = "simplifiedchinese", file = "Fonts\\ARKai_T.ttf", offset = 3 },
-    { alphabet = "traditionalchinese", file = "Fonts\\blei00d.TTF", offset = 3 },
-    { alphabet = "korean", file = "Fonts\\2002.TTF", offset = 0 },
-    { alphabet = "russian", file = "Fonts\\FRIZQT___CYR.TTF", offset = 0 },
-}
-
-local function GetFontFamily(size, flags)
-    flags = flags or ""
-    local key = size .. "|" .. flags
-    if fontFamilies[key] ~= nil then return fontFamilies[key] end
-
-    local family
-    if type(CreateFontFamily) == "function" then
-        local members = {}
-        for i, font in ipairs(fontMembers) do
-            members[i] = {
-                alphabet = font.alphabet,
-                file = font.file,
-                height = size + font.offset,
-                flags = flags,
-            }
-        end
-        fontFamilyCount = fontFamilyCount + 1
-        local name = "MyForeverToolsDungeonFont" .. fontFamilyCount
-        local ok, result = pcall(CreateFontFamily, name, members)
-        if ok then family = result end
-    end
-
-    if not family then
-        if size <= 10 then
-            family = GameFontHighlightSmall
-        elseif size >= 16 then
-            family = GameFontHighlightLarge
-        elseif size >= 13 then
-            family = GameFontHighlightMedium
-        end
-        family = family or GameFontHighlight
-    end
-    fontFamilies[key] = family or false
-    return fontFamilies[key]
-end
+-- Subset of LXGW WenKai Regular v1.530, distributed under SIL OFL 1.1.
+local fontPath = "Interface\\AddOns\\MyForeverTools\\Media\\HandbookCJK.ttf"
+local normalizedFontPath = fontPath:lower()
 
 local function FixFont(region)
+    if region.IsForbidden and region:IsForbidden() then return end
     if not region:IsObjectType("FontString") or not region:IsVisible() then return end
 
     local text = region:GetText()
     if issecretvalue and issecretvalue(text) then return end
     -- UTF-8 leading bytes for Han ideographs, including Extension A and supplementary blocks.
-    if not text or not (text:find("[\228-\233][\128-\191]")
+    if type(text) ~= "string" or not (text:find("[\228-\233][\128-\191]")
         or text:find("\227[\144-\191]")
         or text:find("\239[\164-\171]")
         or text:find("\240[\160-\175]")) then return end
 
     local file, size, flags = region:GetFont()
-    if not size or size <= 0 then return end
-    local current = updatedFonts[region]
-    if current and current.family == region:GetFontObject()
-        and current.file == file and current.size == size and current.flags == flags then
-        return
-    end
-
-    local family = GetFontFamily(size, flags)
-    if not family then return end
-    region:SetFontObject(family)
-    file, size, flags = region:GetFont()
-    updatedFonts[region] = { family = region:GetFontObject(), file = file, size = size, flags = flags }
+    if file and file:lower() == normalizedFontPath then return end
+    -- Replace the explicit font assigned by the handbook, preserving its size and outline.
+    region:SetFont(fontPath, size and size > 0 and size or 14, flags or "")
 end
 
 local function FixVisibleFonts(frame)
-    if not frame:IsVisible() or frame:IsProtected() or frame:IsObjectType("GameTooltip") then return end
+    if (frame.IsForbidden and frame:IsForbidden()) or not frame:IsVisible() or frame:IsObjectType("GameTooltip") then return end
     for _, region in ipairs({ frame:GetRegions() }) do
         FixFont(region)
     end
