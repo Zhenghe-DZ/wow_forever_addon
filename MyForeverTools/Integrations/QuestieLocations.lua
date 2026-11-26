@@ -124,10 +124,11 @@ local function Install()
     -- Preserve Questie's description wrapping by measuring the decorated rows with its own renderer.
     local render = layout.Render
     hooksecurefunc(layout, "Render", function(self, tooltip, rows)
-        if tooltip ~= GameTooltip or not IsShiftKeyDown() or not (WorldMapFrame and WorldMapFrame:IsShown()) then return end
+        if tooltip ~= GameTooltip or not IsShiftKeyDown() then return end
         local pin = tooltip._owner
-        if not pin or pin.miniMapIcon or not pin.data or pin.data ~= tooltip._showData
+        if not pin or not pin.data or pin.data ~= tooltip._showData
             or tooltip._showOwner or tooltip:GetOwner() ~= pin then return end
+        if not pin.miniMapIcon and not (WorldMapFrame and WorldMapFrame:IsShown()) then return end
 
         local titles, suffixes = Titles(tooltip), {}
         local decorated
