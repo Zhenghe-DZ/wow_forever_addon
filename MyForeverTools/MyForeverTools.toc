@@ -1,10 +1,11 @@
 ## Interface: 16001
 ## Title: MyForeverTools
 ## Notes: Personal tools for WoW Forever
-## Version: 0.4.4
+## Version: 0.4.5
 ## OptionalDeps: DungeonsForever, ChatTranslator, Questie
 ## SavedVariablesPerCharacter: MyForeverToolsCharacterDB
 
 Integrations\DungeonsForeverFonts.lua
 Integrations\ChatTranslation.lua
 Integrations\QuestieLocations.lua
+Integrations\QuestieTrackerDetails.lua
